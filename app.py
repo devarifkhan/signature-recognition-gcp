@@ -10,7 +10,8 @@ from fastapi.templating import Jinja2Templates
 
 from src.logger import logging
 from src.exception import CustomException
-from src.pipeline.training import TrainingPipeline
+from src.utils.main_utils import load_object
+from src.entity.config_entity import ModelTrainerConfig
 
 load_dotenv()
 
@@ -44,21 +45,34 @@ app.add_middleware(
 
 @app.get("/", tags=["Health"])
 def home(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html", context={"env_mode": ENV_MODE})
+    model_path = ModelTrainerConfig().MODEL_PATH
+    model_ready = os.path.exists(model_path)
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"env_mode": ENV_MODE, "model_ready": model_ready},
+    )
 
 
 @app.get("/health", tags=["Health"])
 def health():
-    return {"status": "ok", "env": ENV_MODE}
+    model_path = ModelTrainerConfig().MODEL_PATH
+    return {"status": "ok", "env": ENV_MODE, "model_ready": os.path.exists(model_path)}
 
 
 @app.post("/train", tags=["Training"])
 def train():
     try:
+        from src.pipeline.training import TrainingPipeline
         logging.info(f"Training triggered via API — env: {ENV_MODE}")
         pipeline = TrainingPipeline()
-        pipeline.run_pipeline()
-        return JSONResponse({"status": "success", "message": "Training pipeline completed"})
+        artifacts = pipeline.run_pipeline()
+        return JSONResponse({
+            "status": "success",
+            "message": "Training complete",
+            "val_accuracy": f"{artifacts.val_accuracy:.4f}",
+            "model_path": artifacts.model_path,
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(CustomException(e, sys)))
 
@@ -69,20 +83,48 @@ async def predict(file: UploadFile = File(...)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image (PNG or JPG)")
 
+    model_path = ModelTrainerConfig().MODEL_PATH
+    if not os.path.exists(model_path):
+        raise HTTPException(status_code=404, detail="Model not trained yet. Hit /train first.")
+
+    import torch
+    from PIL import Image
+    from torchvision import transforms
+
+    predict_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.Grayscale(num_output_channels=3),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+    ])
+
     tmp_path = f"tmp_{file.filename}"
     try:
         with open(tmp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # TODO: load trained model and run inference
-        # model = load_object(MODEL_PATH)
-        # prediction = model.predict(tmp_path)
+        model = load_object(model_path)
+        model.eval()
+
+        img = Image.open(tmp_path).convert("RGB")
+        tensor = predict_transform(img).unsqueeze(0)
+
+        with torch.no_grad():
+            outputs = model(tensor)
+            probs = torch.softmax(outputs, dim=1)[0]
+            predicted = outputs.argmax(1).item()
+
+        label = "genuine" if predicted == 0 else "forged"
+        confidence = probs[predicted].item()
 
         return JSONResponse({
             "status": "success",
             "filename": file.filename,
-            "prediction": "model not yet trained — run /train first",
+            "prediction": label,
+            "confidence": f"{confidence:.2%}",
         })
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(CustomException(e, sys)))
     finally:

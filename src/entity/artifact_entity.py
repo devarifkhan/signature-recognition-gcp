@@ -1,10 +1,19 @@
 from dataclasses import dataclass
+from typing import Any
 
 
-# Data Ingestion artifacts
 @dataclass
 class DataIngestionArtifacts:
     dataset_path: str
 
-    def to_dict(self):
-        return self.__dict__
+
+@dataclass
+class DataTransformationArtifacts:
+    train_loader: Any
+    val_loader: Any
+
+
+@dataclass
+class ModelTrainerArtifacts:
+    model_path: str
+    val_accuracy: float

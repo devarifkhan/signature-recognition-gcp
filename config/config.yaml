@@ -2,3 +2,13 @@ data_ingestion_config:
   zip_file_name: dataset.zip
   bucket_name: sig-recog
   dataset_folder_name: signature-recog
+
+data_transformation_config:
+  train_split: 0.8
+  batch_size: 32
+  image_size: 224
+
+model_trainer_config:
+  epochs: 10
+  learning_rate: 0.001
+  model_file_name: signature_model.pkl
