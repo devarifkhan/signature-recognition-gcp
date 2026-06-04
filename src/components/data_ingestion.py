@@ -4,6 +4,7 @@ from zipfile import ZipFile
 from src.logger import logging
 from src.exception import CustomException
 from src.configurations.gcloud_syncer import GCloudSync
+from src.constants import ENV_MODE
 from src.entity.config_entity import DataIngestionConfig
 from src.entity.artifact_entity import DataIngestionArtifacts
 
@@ -57,32 +58,46 @@ class DataIngestion:
             raise CustomException(e, sys) from e
 
     def initiate_data_ingestion(self) -> DataIngestionArtifacts:
-        """
-        Method Name :   initiate_data_ingestion
-        Description :   This function initiates a data ingestion steps
-
-        Output      :   Returns data ingestion artifact
-        On Failure  :   Write an exception log and then raise an exception
-        """
         logging.info("Entered the initiate_data_ingestion method of Data ingestion class")
         try:
-            self.get_data_from_gcloud()
-            logging.info("Fetched the zipped dataset from Gcloud Storage bucket")
-
-            self.unzip_and_clean()
-            logging.info("Unzipped the file fetched from Gcloud Storage bucket")
-
-            logging.info("Deleting dataset.zip file")
-            os.remove(os.path.join(self.data_ingestion_config.DATA_INGESTION_ARTIFACTS_DIR,
-                                   self.data_ingestion_config.ZIP_FILE_NAME))
-
-            data_ingestion_artifacts = DataIngestionArtifacts(
-                dataset_path=self.data_ingestion_config.DATA_INGESTION_ARTIFACTS_DIR)
-
-            logging.info(f"Data ingestion artifact: {data_ingestion_artifacts}")
-
-            logging.info("Exited the initiate_data_ingestion method of Data ingestion class")
-            return data_ingestion_artifacts
-
+            if ENV_MODE == "dev":
+                return self._ingest_from_local()
+            else:
+                return self._ingest_from_gcloud()
         except Exception as e:
             raise CustomException(e, sys) from e
+
+    def _ingest_from_local(self) -> DataIngestionArtifacts:
+        local_dir = self.data_ingestion_config.LOCAL_DATA_DIR
+        logging.info(f"Dev mode — using local dataset from: {local_dir}")
+
+        if not os.path.exists(local_dir):
+            raise FileNotFoundError(
+                f"Dev mode: '{local_dir}' folder not found. Create it and place your dataset inside."
+            )
+
+        zip_path = os.path.join(local_dir, self.data_ingestion_config.ZIP_FILE_NAME)
+        if os.path.exists(zip_path):
+            logging.info(f"Found zip file: {zip_path} — extracting...")
+            with ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(local_dir)
+            os.remove(zip_path)
+            logging.info("Extraction complete, zip removed")
+
+        return DataIngestionArtifacts(dataset_path=local_dir)
+
+    def _ingest_from_gcloud(self) -> DataIngestionArtifacts:
+        self.get_data_from_gcloud()
+        logging.info("Fetched the zipped dataset from GCloud Storage bucket")
+
+        self.unzip_and_clean()
+        logging.info("Unzipped the dataset")
+
+        os.remove(os.path.join(self.data_ingestion_config.DATA_INGESTION_ARTIFACTS_DIR,
+                               self.data_ingestion_config.ZIP_FILE_NAME))
+
+        data_ingestion_artifacts = DataIngestionArtifacts(
+            dataset_path=self.data_ingestion_config.DATA_INGESTION_ARTIFACTS_DIR)
+
+        logging.info(f"Data ingestion artifact: {data_ingestion_artifacts}")
+        return data_ingestion_artifacts

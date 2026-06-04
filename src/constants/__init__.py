@@ -1,5 +1,10 @@
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ENV_MODE: str = os.getenv("ENV_MODE", "dev")
 
 # Common constants
 CONFIG_PATH: str = os.path.join(os.getcwd(), "config", "config.yaml")

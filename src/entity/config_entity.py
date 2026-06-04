@@ -11,4 +11,6 @@ class DataIngestionConfig:
         self.ZIP_FILE_NAME: str = self.config['data_ingestion_config']["zip_file_name"]
         self.DATA_INGESTION_ARTIFACTS_DIR: str = os.path.join(os.getcwd(), ARTIFACTS_DIR, DATA_INGESTION_ARTIFACTS_DIR)
         self.ZIP_FILE_PATH: str = os.path.join(self.DATA_INGESTION_ARTIFACTS_DIR, self.ZIP_FILE_NAME)
+        self.DATASET_FOLDER_NAME: str = self.config['data_ingestion_config']["dataset_folder_name"]
+        self.LOCAL_DATA_DIR: str = os.path.join(os.getcwd(), "data", self.DATASET_FOLDER_NAME)
 

@@ -3,9 +3,10 @@ import sys
 import shutil
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, Request, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
 
 from src.logger import logging
 from src.exception import CustomException
@@ -22,6 +23,8 @@ if IS_DEV:
 else:
     HOST = os.getenv("PROD_HOST", "0.0.0.0")
     PORT = int(os.getenv("PROD_PORT", "8080"))
+
+templates = Jinja2Templates(directory="templates")
 
 app = FastAPI(
     title="Signature Recognition API",
@@ -40,6 +43,10 @@ app.add_middleware(
 
 
 @app.get("/", tags=["Health"])
+def home(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html", context={"env_mode": ENV_MODE})
+
+
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok", "env": ENV_MODE}

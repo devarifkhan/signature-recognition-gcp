@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Signature Recognition</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
+  <style>
+    body { background: #f4f6fb; font-family: 'Segoe UI', sans-serif; }
+    .hero { background: linear-gradient(135deg, #1a237e 0%, #283593 100%); color: white; padding: 60px 0 40px; }
+    .hero h1 { font-weight: 700; font-size: 2.4rem; }
+    .hero p  { opacity: .85; font-size: 1.1rem; }
+    .feature-card { border: none; border-radius: 16px; box-shadow: 0 2px 16px rgba(0,0,0,.08); transition: transform .2s; }
+    .feature-card:hover { transform: translateY(-4px); }
+    .feature-card .icon { font-size: 2.2rem; margin-bottom: 12px; }
+    .result-box { margin-top: 14px; border-radius: 10px; padding: 12px 14px; font-size: .9rem; display: none; }
+    .result-box.show { display: block; }
+    .drop-zone { border: 2px dashed #7986cb; border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; background: #f0f3ff; transition: background .2s; }
+    .drop-zone.dragover { background: #e8eaf6; }
+    .drop-zone img { max-height: 140px; margin-top: 12px; border-radius: 8px; }
+    .env-badge { font-size: .85rem; padding: 4px 12px; border-radius: 20px; font-weight: 600; }
+    .spinner-border-sm { width: 1rem; height: 1rem; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark" style="background:#1a237e;">
+  <div class="container">
+    <span class="navbar-brand fw-bold"><i class="bi bi-pen"></i> Signature Recognition</span>
+    <span class="env-badge bg-{{ 'success' if env_mode == 'dev' else 'warning text-dark' }}">
+      {{ env_mode | upper }}
+    </span>
+  </div>
+</nav>
+
+<section class="hero text-center">
+  <div class="container">
+    <h1><i class="bi bi-shield-check me-2"></i>Signature Recognition API</h1>
+    <p>Genuine vs Forged signature detection powered by ResNet-34</p>
+    <a href="/docs" class="btn btn-light btn-sm mt-2"><i class="bi bi-code-slash me-1"></i>Swagger Docs</a>
+  </div>
+</section>
+
+<div class="container py-5">
+  <div class="row g-4">
+
+    <!-- Health Check -->
+    <div class="col-md-4">
+      <div class="card feature-card h-100 p-4">
+        <div class="icon text-primary"><i class="bi bi-activity"></i></div>
+        <h5 class="fw-bold">Health Check</h5>
+        <p class="text-muted small">Check if the API server is alive and running.</p>
+        <button class="btn btn-outline-primary w-100" onclick="checkHealth(this)">
+          <i class="bi bi-play-circle me-1"></i>Check Status
+        </button>
+        <div id="health-result" class="result-box"></div>
+      </div>
+    </div>
+
+    <!-- Train -->
+    <div class="col-md-4">
+      <div class="card feature-card h-100 p-4">
+        <div class="icon text-warning"><i class="bi bi-cpu"></i></div>
+        <h5 class="fw-bold">Train Model</h5>
+        <p class="text-muted small">Pull dataset from GCS and run the full training pipeline.</p>
+        <button class="btn btn-outline-warning w-100" onclick="trainModel(this)">
+          <i class="bi bi-lightning-charge me-1"></i>Start Training
+        </button>
+        <div id="train-result" class="result-box"></div>
+      </div>
+    </div>
+
+    <!-- Predict -->
+    <div class="col-md-4">
+      <div class="card feature-card h-100 p-4">
+        <div class="icon text-success"><i class="bi bi-image"></i></div>
+        <h5 class="fw-bold">Predict Signature</h5>
+        <p class="text-muted small">Upload a signature image to classify as genuine or forged.</p>
+
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('sig-file').click()"
+             ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+          <i class="bi bi-cloud-upload fs-3 text-muted"></i>
+          <p class="mb-0 text-muted small mt-2">Click or drag &amp; drop image here</p>
+          <img id="preview" src="" alt="" style="display:none"/>
+        </div>
+        <input type="file" id="sig-file" accept="image/*" class="d-none" onchange="previewFile(this)"/>
+
+        <button class="btn btn-outline-success w-100 mt-3" onclick="predict(this)">
+          <i class="bi bi-search me-1"></i>Predict
+        </button>
+        <div id="predict-result" class="result-box"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer class="text-center text-muted py-4 small">
+  Signature Recognition &copy; 2025 &mdash; ResNet-34 &bull; PyTorch &bull; GCP
+</footer>
+
+<script>
+  function setLoading(btn, loading) {
+    if (loading) {
+      btn.disabled = true;
+      btn.dataset.orig = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = btn.dataset.orig;
+    }
+  }
+
+  function showResult(id, data, isError) {
+    const el = document.getElementById(id);
+    el.className = 'result-box show alert ' + (isError ? 'alert-danger' : 'alert-success');
+    el.innerHTML = '<pre class="mb-0" style="white-space:pre-wrap">' + JSON.stringify(data, null, 2) + '</pre>';
+  }
+
+  async function checkHealth(btn) {
+    setLoading(btn, true);
+    try {
+      const res = await fetch('/health');
+      const data = await res.json();
+      showResult('health-result', data, !res.ok);
+    } catch (e) {
+      showResult('health-result', { error: e.message }, true);
+    } finally { setLoading(btn, false); }
+  }
+
+  async function trainModel(btn) {
+    setLoading(btn, true);
+    try {
+      const res = await fetch('/train', { method: 'POST' });
+      const data = await res.json();
+      showResult('train-result', data, !res.ok);
+    } catch (e) {
+      showResult('train-result', { error: e.message }, true);
+    } finally { setLoading(btn, false); }
+  }
+
+  async function predict(btn) {
+    const file = document.getElementById('sig-file').files[0];
+    if (!file) { alert('Please select an image first.'); return; }
+    setLoading(btn, true);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch('/predict', { method: 'POST', body: form });
+      const data = await res.json();
+      showResult('predict-result', data, !res.ok);
+    } catch (e) {
+      showResult('predict-result', { error: e.message }, true);
+    } finally { setLoading(btn, false); }
+  }
+
+  function previewFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.getElementById('preview');
+      img.src = e.target.result;
+      img.style.display = 'block';
+      document.querySelector('#drop-zone p').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+  function onDragLeave(e) { document.getElementById('drop-zone').classList.remove('dragover'); }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('sig-file').files = dt.files;
+      previewFile(document.getElementById('sig-file'));
+    }
+  }
+</script>
+
+</body>
+</html>

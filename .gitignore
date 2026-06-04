@@ -131,3 +131,5 @@ dmypy.json
 
 notebook/data/
 artifacts/
+data/*
+!data/.gitkeep
