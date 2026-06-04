@@ -1,12 +1,10 @@
 from setuptools import find_packages, setup
 
-
 setup(
     name="src",
+    version="0.0.1",
+    author='deepranjan',
+    author_email='deepranjan@ineuron.ai',
     packages=find_packages(),
-    version="0.1.0",
-    description="signature recognition",
-    author="md ariful islam",
     install_requires=[]
-
 )
