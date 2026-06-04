@@ -1,147 +1,173 @@
-# Signature recognition
+# Signature Recognition
 
 #### Language and Libraries
 
 <p>
 <a><img src="https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=darkgreen" alt="python"/></a>
-<a><img src="https://img.shields.io/badge/Pandas-2C2D72?style=for-the-badge&logo=pandas&logoColor=white" alt="pandas"/></a>
+<a><img src="https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white" alt="pytorch"/></a>
+<a><img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="fastapi"/></a>
 <a><img src="https://img.shields.io/badge/Numpy-777BB4?style=for-the-badge&logo=numpy&logoColor=white" alt="numpy"/></a>
 <a><img src="https://img.shields.io/badge/opencv-%23white.svg?style=for-the-badge&logo=opencv&logoColor=white" alt="opencv"/></a>
-<a><img src="https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white" alt="pytorch"/></a>
 <a><img src="https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)" alt="docker"/></a>
 <a><img src="https://img.shields.io/badge/GoogleCloud-%234285F4.svg?style=for-the-badge&logo=google-cloud&logoColor=white" alt="gcp"/></a>
 </p>
 
-## Problem statement
+## Problem Statement
 
-The task of signature recognition involves building a system that can automatically recognize an individual's signature from a given set of signature images. 
-The system should be able to distinguish between genuine signatures and forged ones, and should work robustly even in the presence of noise and variations in the signature style.
+Signature recognition involves building a system that can automatically distinguish between **genuine** signatures (signed by the actual person) and **forged** signatures (imitated by someone else). The system must work robustly in the presence of noise and natural variation in handwriting style.
 
-## Solution Proposed
+## Solution
 
-The goal of signature recognition is to develop an accurate and reliable system that can automatically recognize an individual's signature and distinguish it from forged signatures. 
-This can have practical applications in areas such as document verification, fraud detection, and biometric identification.
+A FastAPI-based web application that serves a ResNet-34 deep learning model fine-tuned for binary classification — **genuine vs forged**. The system supports two environments:
 
-## Dataset Used
+- **Dev mode** — runs locally, uses data from the `data/` folder
+- **Prod mode** — runs on GCP, pulls dataset from Google Cloud Storage
 
-CEDAR Signature is a database of off-line signatures for signature verification. 
-Each of 55 individuals contributed 24 signatures thereby creating 1,320 genuine signatures. Some were asked to forge three other writers’ signatures, eight times per subject, thus creating 1,320 forgeries. 
-Each signature was scanned at 300 dpi gray-scale and binarized using a gray-scale histogram. Salt pepper noise removal and slant normalization were two steps involved in image preprocessing. The database has 24 genuines and 24 forgeries available for each writer.
-## Model Used
+## Dataset
 
-ResNet-34 is a popular deep convolutional neural network architecture that was introduced in the paper "Deep Residual Learning for Image Recognition" by Kaiming He et al. in 2016.
+**CEDAR Signature Database** — an offline signature verification dataset.
 
-ResNet-34 consists of 34 layers, including 33 convolutional layers and 1 fully connected layer. 
-The architecture of ResNet-34 is based on the residual learning framework, which allows the network to be deeper while maintaining good performance.
+- 55 individuals, each with 24 genuine signatures → 1,320 genuine total
+- 1,320 forged signatures (others imitating each person's signature)
+- Scanned at 300 dpi grayscale, preprocessed with noise removal and slant normalization
+- Folder structure: `001/` = genuine, `001_forg/` = forged
 
-## How to run?
+## Model
 
-### Step 1: Clone the repository
-```bash
-git clone my repository 
+**ResNet-34** (pretrained on ImageNet, fine-tuned for binary classification)
+
+- 34 layers: 33 convolutional + 1 fully connected
+- Final FC layer replaced: outputs 2 classes (genuine / forged)
+- Residual connections allow deeper training without degradation
+
+## Project Structure
+
+```
+├── app.py                      # FastAPI application (dev + prod)
+├── main.py                     # Run training pipeline from CLI
+├── config/config.yaml          # Dataset, training hyperparameters
+├── .env                        # ENV_MODE=dev or prod
+├── data/                       # Local dataset (dev only)
+│   └── signature-recog/
+│       ├── 001/                # Genuine signatures
+│       ├── 001_forg/           # Forged signatures
+│       └── ...
+├── model/                      # Saved trained model
+│   └── signature_model.pkl
+├── templates/
+│   └── index.html              # Web UI
+├── src/
+│   ├── components/
+│   │   ├── data_ingestion.py   # Load from GCS (prod) or local (dev)
+│   │   ├── data_transformation.py  # Dataset, transforms, DataLoaders
+│   │   └── model_trainer.py    # ResNet-34 training loop
+│   ├── pipeline/
+│   │   └── training.py         # Orchestrates all pipeline steps
+│   ├── entity/
+│   │   ├── config_entity.py    # Config dataclasses
+│   │   └── artifact_entity.py  # Artifact dataclasses
+│   ├── configurations/
+│   │   └── gcloud_syncer.py    # gsutil wrapper for GCS
+│   ├── constants/__init__.py   # Paths, device, env mode
+│   ├── utils/main_utils.py     # save/load object, YAML reader
+│   ├── logger/__init__.py      # Timestamped file logging
+│   └── exception/__init__.py   # Custom exception with line info
+├── Dockerfile                  # Production container (GCP)
+└── requirements.txt
 ```
 
-### Step 2- Create a conda environment after opening the repository
+## API Endpoints
 
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Web UI with interactive feature cards |
+| GET | `/health` | API status + model readiness check |
+| POST | `/train` | Run full training pipeline |
+| POST | `/predict` | Upload signature image → genuine / forged + confidence |
+| GET | `/docs` | Swagger UI (dev mode only) |
+
+## How to Run (Dev)
+
+### Step 1 — Clone the repository
 ```bash
-conda create -p env python=3.8 -y
+git clone <repository-url>
+cd signature-recognition-gcp
 ```
 
-```bash
-conda activate env
+### Step 2 — Create and activate virtual environment
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-### Step 3 - Install the requirements
+### Step 3 — Install dependencies
+
+> Windows users: install **Microsoft Visual C++ Redistributable 2022 (x64)** before installing torch.
+
 ```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
-### Step 4 - Install Google Cloud Sdk and configure
+### Step 4 — Add dataset
+Place the CEDAR dataset inside the `data/` folder:
+```
+data/
+└── signature-recog/
+    ├── 001/
+    ├── 001_forg/
+    └── ...
+```
 
-#### For Windows
-```bash
-https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe
+### Step 5 — Configure environment
+In `.env`, set:
 ```
-#### For Ubuntu
-```bash
-sudo apt-get install apt-transport-https ca-certificates gnupg
+ENV_MODE=dev
 ```
-```bash
-echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-```
-```bash
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
-```
-```bash
-sudo apt-get update && sudo apt-get install google-cloud-cli
-```
-```bash
-gcloud init
-```
-Before running server application make sure your `Google Cloud Storage` bucket is available
 
-### Step 5 - Run the application server
+### Step 6 — Run the server
 ```bash
 python app.py
 ```
 
-## Run locally
+Open `http://127.0.0.1:8000` in your browser. Click **Train** to train the model, then **Predict** to classify a signature image.
 
-1. Check if the Dockerfile is available in the project directory
+## How to Run (Prod / GCP)
 
-2. Build the Docker image
-
+### Step 1 — Configure environment
+In `.env`, set:
 ```
-docker build -t sign . 
+ENV_MODE=prod
 ```
+Make sure your GCS bucket (`sig-recog`) contains `dataset.zip`.
 
-3. Run the Docker image
-
-```
-docker run -d -p 8080:8080 <IMAGEID>
-```
-
-4. Open docker image in interactive model
-
-```
-docker exec -ti <IMAGEID> bash
-```
-
-5. Authenticate GCloud
-
-```
+### Step 2 — Authenticate GCloud
+```bash
 gcloud auth login
-```
-
-6. Authenticate default application
-
-```
 gcloud auth application-default login
 ```
 
-👨‍💻 Tech Stack Used
-1. Python
-2. Pytorch
-3. Docker
+### Step 3 — Build and run Docker container
+```bash
+docker build -t signature-api .
+docker run -d -p 8080:8080 signature-api
+```
 
-🌐 Infrastructure Required.
-1. Google Cloud Storage
-2. Google Compute Engine
-3. Google Artifact Registry
-4. Circle CI
+Open `http://0.0.0.0:8080`. Swagger docs are disabled in prod mode.
 
+## Tech Stack
 
-## `src` is the main package folder which contains 
+| Layer | Technology |
+|-------|-----------|
+| Model | PyTorch, ResNet-34 |
+| API | FastAPI, Uvicorn |
+| UI | Bootstrap 5, Vanilla JS |
+| Storage | Google Cloud Storage |
+| Container | Docker |
+| Infrastructure | GCP (Cloud Run / Compute Engine) |
 
-**Artifact** : Stores all artifacts created from running the application
+## Infrastructure Required (Prod)
 
-**Components** : Contains all components of this project
-- DataIngestion
-- DataTransformation
-- ModelTrainer
-- ModelEvaluation
-- ModelPusher
-
-**Custom Logger and Exceptions** are used in the project for better debugging purposes.
-
-=====================================================================
+1. Google Cloud Storage — dataset and model storage
+2. Google Compute Engine or Cloud Run — server hosting
+3. Google Artifact Registry — Docker image registry
