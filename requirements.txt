@@ -19,5 +19,5 @@ python-multipart
 python-dotenv
 #pycocotools   #Comment when creating Docker Image
 google-cloud-storage
-apache-airflow==2.4.3
+apache-airflow==3.2.1rc1
 -e .
